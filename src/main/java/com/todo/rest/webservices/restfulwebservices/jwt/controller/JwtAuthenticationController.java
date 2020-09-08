@@ -10,13 +10,19 @@ import com.todo.rest.webservices.restfulwebservices.jwt.model.JwtRequest;
 import com.todo.rest.webservices.restfulwebservices.jwt.model.JwtResponse;
 import com.todo.rest.webservices.restfulwebservices.jwt.service.JwtUserDetailsService;
 import com.todo.rest.webservices.restfulwebservices.jwt.config.JwtTokenUtil;
+import com.todo.rest.webservices.restfulwebservices.todo.Todo;
+import com.todo.rest.webservices.restfulwebservices.user.DAOUser;
+import com.todo.rest.webservices.restfulwebservices.user.UserDAO;
 import com.todo.rest.webservices.restfulwebservices.user.UserDTO;
+import com.todo.rest.webservices.restfulwebservices.utilities.ChangePasswordObject;
 import com.todo.rest.webservices.restfulwebservices.utilities.ConfigUtility;
+import com.todo.rest.webservices.restfulwebservices.utilities.UserUtilities;
 import org.apache.tomcat.util.json.JSONParser;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.jackson.JsonObjectDeserializer;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -24,11 +30,12 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.web.header.Header;
+
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
-import java.lang.module.Configuration;
+import java.net.PasswordAuthentication;
 
 
 @RestController
@@ -46,7 +53,19 @@ public class JwtAuthenticationController {
     private JwtUserDetailsService userDetailsService;
 
     @Autowired
+    private UserUtilities userUtilities;
+
+    @Autowired
     private ConfigUtility configUtil;
+
+    @Autowired
+    private UserDAO userDAO;
+
+    @Autowired
+    private ChangePasswordObject changePasswordObject;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
 
     @RequestMapping(value = "/register", method = RequestMethod.POST)
     public ResponseEntity<?> saveUser(@RequestBody UserDTO user, @RequestHeader("Recaptcha-Response") String recaptchaResponse) throws Exception {
@@ -71,6 +90,36 @@ public class JwtAuthenticationController {
 
         return ResponseEntity.ok(new JwtResponse(token));
     }
+
+
+    @RequestMapping(value = "/users/{username}/change_password", method = RequestMethod.POST)
+    public ResponseEntity<?> changeUserPassword(
+            @PathVariable String username,
+            @RequestBody ChangePasswordObject changePasswordObject,
+            @RequestHeader("Authorization") String authorizationHeader) throws Exception {
+
+        DAOUser daoUser = userUtilities
+                .getDAOUserFromAuthorizationHeader(authorizationHeader);
+
+        DAOUser daoUserFromDB = userDAO.findByUsername(username);
+
+        //Use this to check if the current password is related to that user
+        authenticate(daoUser.getUsername(), changePasswordObject.getCurrentPassword());
+
+        if(daoUser.getUsername().equals(daoUserFromDB.getUsername())){
+                daoUserFromDB.setPassword(passwordEncoder.encode(changePasswordObject.getNewPassword()));
+                userDAO.save(daoUserFromDB);
+                final UserDetails userDetails = userDetailsService
+                        .loadUserByUsername(daoUserFromDB.getUsername());
+                final String token = jwtTokenUtil.generateToken(userDetails);
+                return ResponseEntity.ok(new JwtResponse(token));
+                //return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
+
+        }
+        else throw new Exception("Unauthorized");
+    }
+
+
 
     private void authenticate(String username, String password) throws Exception {
         try {
@@ -98,4 +147,7 @@ public class JwtAuthenticationController {
         return  jsonObject.get("success").getAsBoolean();
 
     }
+
+
+
 }

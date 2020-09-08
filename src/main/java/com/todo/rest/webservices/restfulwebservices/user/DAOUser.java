@@ -1,6 +1,9 @@
 package com.todo.rest.webservices.restfulwebservices.user;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.todo.rest.webservices.restfulwebservices.profile.Profile;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import javax.persistence.*;
 import java.io.Serializable;
@@ -9,6 +12,8 @@ import java.util.Objects;
 @Entity
 @Table(name = "user")
 public class DAOUser implements Serializable{
+
+
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -21,6 +26,9 @@ public class DAOUser implements Serializable{
     @JsonIgnore
     private String password;
 
+    public long getId() {
+        return id;
+    }
     public String getUsername() {
         return username;
     }
@@ -36,6 +44,4 @@ public class DAOUser implements Serializable{
     public void setPassword(String password) {
         this.password = password;
     }
-
-
 }
